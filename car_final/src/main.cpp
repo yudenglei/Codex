@@ -4,26 +4,27 @@
 
 int main() {
   cae::BoardDb db;
-  auto s_gnd = db.strings.intern("GND");
-  auto s_a = db.strings.intern("a");
-  auto s_b = db.strings.intern("b");
+  auto n_name = db.strings.intern("NET_CLK");
+  auto n_desc = db.strings.intern("clock net high speed");
+  auto sid_a = db.strings.intern("a");
+  auto sid_b = db.strings.intern("b");
 
-  cae::Net gnd{};
-  gnd.name = s_gnd;
-  auto net_id = db.add_net(gnd);
+  cae::Net n{};
+  n.name = n_name;
+  n.description = n_desc;
+  cae::Id net_id = db.add_net(n);
 
-  cae::Trace t{};
-  t.net = net_id;
-  t.layer = 1;
-  t.segments.push_back({{0, 0}, {1000, 0}, 100});
-  auto trace_id = db.add_trace(t);
+  cae::Trace tr{};
+  tr.net = net_id;
+  tr.layer = 1;
+  tr.segments.push_back({{0, 0}, {100, 0}, 10});
+  auto tid = db.add_trace(tr);
 
-  cae::ParamTable params;
-  params.set_var(s_a, 10.0);
-  params.set_var(s_b, 20.0);
-  std::cout << "trace=" << trace_id << " expr(a*b)=" << params.eval_add_mul(s_a, '*', s_b) << "\n";
+  db.params.set_var(sid_a, 5);
+  db.params.set_var(sid_b, 6);
+  std::cout << "trace=" << tid << " expr=" << db.params.eval(std::to_string(sid_a) + "*" + std::to_string(sid_b)) << "\n";
 
-  db.tx.undo();
-  db.tx.redo();
+  auto hits = db.strings.search_full_text("clock");
+  std::cout << "fulltext_hits=" << hits.size() << " layer_hits=" << db.query_trace_on_layer(1, {0, -1, 101, 1}).size() << "\n";
   return 0;
 }
