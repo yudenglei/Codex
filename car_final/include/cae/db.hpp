@@ -18,6 +18,8 @@ class BoardDb : public SceneAdapter {
   UndoRedo tx;
   ParamTable params;
 
+  BoardDb() : params(&strings) {}
+
   ReuseVector<Layer> layers;
   ReuseVector<Net> nets;
   ReuseVector<PadstackDef> padstacks;

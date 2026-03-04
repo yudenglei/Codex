@@ -17,12 +17,13 @@ int main() {
   cae::Trace tr{};
   tr.net = net_id;
   tr.layer = 1;
-  tr.segments.push_back({{cae::lit(0), cae::lit(0)}, {cae::lit(100), cae::lit(0)}, cae::lit(10)});
+  auto expr_sid = db.strings.intern("a+b+max(a,b)");
+  tr.segments.push_back({{cae::lit(0), cae::lit(0)}, {cae::lit(100), cae::lit(0)}, cae::param(expr_sid)});
   auto tid = db.add_trace(tr);
 
   db.params.set_var(sid_a, 5);
   db.params.set_var(sid_b, 6);
-  std::cout << "trace=" << tid << " expr=" << db.params.eval(std::to_string(sid_a) + "*" + std::to_string(sid_b)) << "\n";
+  std::cout << "trace=" << tid << " width_expr_value=" << db.params.resolve(db.traces.get(tid)->segments[0].width) << "\n";
 
   auto hits = db.strings.search_full_text("clock");
   std::cout << "fulltext_hits=" << hits.size() << " layer_hits=" << db.query_trace_on_layer(1, {0, -1, 101, 1}).size() << "\n";
