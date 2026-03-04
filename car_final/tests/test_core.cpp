@@ -41,24 +41,24 @@ int main() {
   db.commit_tx();
   assert(db.tx.undo());
 
+  // Requested Grok-style usage:
+  db.expr_pool.setVariable("a", 10);
+  db.expr_pool.setVariable("b", 13);
+
+  cae::ObjectId traceId = db.add_trace(5, cae::Trace{});
+  assert(db.traces.get(traceId) != nullptr);
+  db.traces.get(traceId)->segments.push_back({{cae::lit(0), cae::lit(0)}, {cae::lit(20), cae::lit(0)}, cae::lit(1)});
+  assert(db.set_trace_width_expression(traceId, "a + b + max(a, b)"));
+  assert(db.params.resolve(db.traces.get(traceId)->segments[0].width) == 36);
+
+  auto hits_expr = db.query_trace_on_layer(5, {0, -1, 20, 1});
+  assert(!hits_expr.empty());
+
+  // Backward-compatible API still works.
   db.params.set_var(s_a, 3);
   db.params.set_var(s_b, 4);
-  auto v = db.params.eval(std::to_string(s_a) + "+" + std::to_string(s_b));
+  auto v = db.params.eval("a+b");
   assert(v == 7);
-
-
-  auto s_expr = db.strings.intern("a+b+max(a,b)");
-  cae::Trace t_expr{};
-  t_expr.net = net_id;
-  t_expr.layer = 3;
-  t_expr.segments.push_back({{cae::lit(0), cae::lit(0)}, {cae::lit(20), cae::lit(0)}, cae::param(s_expr)});
-  db.params.set_var(s_a, 10);
-  db.params.set_var(s_b, 13);
-  auto teid = db.add_trace(t_expr);
-  assert(db.traces.get(teid)->segments[0].width.is_param());
-  assert(db.params.resolve(db.traces.get(teid)->segments[0].width) == 36);
-  auto hits_expr = db.query_trace_on_layer(3, {0, -1, 20, 1});
-  assert(!hits_expr.empty());
 
   auto p2d = db.collect_2d();
   assert(!p2d.empty());

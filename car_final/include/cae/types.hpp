@@ -4,6 +4,7 @@
 
 namespace cae {
 using Id = uint32_t;
+using ObjectId = Id;
 using LayerId = uint16_t;
 using StringId = uint32_t;
 

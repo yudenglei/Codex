@@ -8,6 +8,7 @@
 #include "cae/undo.hpp"
 
 #include <algorithm>
+#include <string>
 #include <unordered_map>
 
 namespace cae {
@@ -16,9 +17,10 @@ class BoardDb : public SceneAdapter {
  public:
   StringPool strings;
   UndoRedo tx;
-  ParamTable params;
+  ParamTable expr_pool;
+  ParamTable& params;
 
-  BoardDb() : params(&strings) {}
+  BoardDb() : expr_pool(&strings), params(expr_pool) {}
 
   ReuseVector<Layer> layers;
   ReuseVector<Net> nets;
@@ -44,11 +46,12 @@ class BoardDb : public SceneAdapter {
 
   Id add_net(Net n) { return add_generic(nets, std::move(n)); }
   Id add_board(Board b) { return add_generic(boards, std::move(b)); }
+
   Id add_trace(Trace t) {
     Id id = add_generic(traces, t);
     auto* tr = traces.get(id);
     layer_traces_[tr->layer].push_back(id);
-    trace_index.upsert(tr->layer, id, bbox(*tr, [this](DbuValue v){ return params.resolve(v);}));
+    trace_index.upsert(tr->layer, id, bbox(*tr, [this](DbuValue v) { return expr_pool.resolve(v); }));
     tx.push({[this, id, layer = tr->layer]() {
                traces.remove(id);
                auto& v = layer_traces_[layer];
@@ -60,10 +63,27 @@ class BoardDb : public SceneAdapter {
                tr.id = nid;
                traces.replace(nid, tr);
                layer_traces_[tr.layer].push_back(nid);
-               trace_index.upsert(tr.layer, nid, bbox(tr, [this](DbuValue v){ return params.resolve(v);}));
+               trace_index.upsert(tr.layer, nid, bbox(tr, [this](DbuValue v) { return expr_pool.resolve(v); }));
              },
              "add_trace"});
     return id;
+  }
+
+  // Grok-style API compatibility: add_trace(layer, trace)
+  ObjectId add_trace(ObjectId layer, const Trace& t) {
+    Trace cp = t;
+    cp.layer = static_cast<LayerId>(layer);
+    return add_trace(cp);
+  }
+
+  // Directly bind expression string to trace width (segment-wise)
+  bool set_trace_width_expression(ObjectId trace_id, const std::string& expression) {
+    auto* tr = traces.get(trace_id);
+    if (!tr) return false;
+    const StringId sid = strings.intern(expression);
+    Trace next = *tr;
+    for (auto& seg : next.segments) seg.width = param(sid);
+    return replace_trace(trace_id, next);
   }
 
   bool replace_trace(Id id, const Trace& newer) {
@@ -73,16 +93,16 @@ class BoardDb : public SceneAdapter {
     Trace after = newer;
     after.id = id;
 
-    traces.replace(id, after);  // klayout 风格：remove old + add new 的容器替换语义等价
-    trace_index.upsert(after.layer, id, bbox(after, [this](DbuValue v){ return params.resolve(v);}));
+    traces.replace(id, after);
+    trace_index.upsert(after.layer, id, bbox(after, [this](DbuValue v) { return expr_pool.resolve(v); }));
 
     tx.push({[this, id, before]() {
                traces.replace(id, before);
-               trace_index.upsert(before.layer, id, bbox(before, [this](DbuValue v){ return params.resolve(v);}));
+               trace_index.upsert(before.layer, id, bbox(before, [this](DbuValue v) { return expr_pool.resolve(v); }));
              },
              [this, id, after]() {
                traces.replace(id, after);
-               trace_index.upsert(after.layer, id, bbox(after, [this](DbuValue v){ return params.resolve(v);}));
+               trace_index.upsert(after.layer, id, bbox(after, [this](DbuValue v) { return expr_pool.resolve(v); }));
              },
              "replace_trace"});
     return true;
@@ -93,12 +113,13 @@ class BoardDb : public SceneAdapter {
     begin_tx("batch_replace");
     for (const auto& [id, nv] : updates) {
       auto* ov = vec.get(id);
-      if (!ov) { rollback_tx(); return false; }
+      if (!ov) {
+        rollback_tx();
+        return false;
+      }
       T old = *ov;
       vec.replace(id, nv);
-      tx.push({[&vec, id, old]() { vec.replace(id, old); },
-               [&vec, id, nv]() { vec.replace(id, nv); },
-               "batch_replace_item"});
+      tx.push({[&vec, id, old]() { vec.replace(id, old); }, [&vec, id, nv]() { vec.replace(id, nv); }, "batch_replace_item"});
     }
     commit_tx();
     return true;
@@ -108,8 +129,12 @@ class BoardDb : public SceneAdapter {
 
   std::vector<ScenePrimitive> collect_2d() const override {
     std::vector<ScenePrimitive> out;
-    traces.for_each([&](Id id, const Trace& t) { out.push_back({t.layer, bbox(t, [this](DbuValue v){ return params.resolve(v);}), id}); });
-    texts.for_each([&](Id id, const Text& t) { const auto x=to_i32(params.resolve(t.loc.x)); const auto y=to_i32(params.resolve(t.loc.y)); out.push_back({t.layer, {x,y,x,y}, id}); });
+    traces.for_each([&](Id id, const Trace& t) { out.push_back({t.layer, bbox(t, [this](DbuValue v) { return expr_pool.resolve(v); }), id}); });
+    texts.for_each([&](Id id, const Text& t) {
+      const auto x = to_i32(expr_pool.resolve(t.loc.x));
+      const auto y = to_i32(expr_pool.resolve(t.loc.y));
+      out.push_back({t.layer, {x, y, x, y}, id});
+    });
     return out;
   }
 
@@ -117,8 +142,15 @@ class BoardDb : public SceneAdapter {
     std::vector<ScenePrimitive> out;
     surfaces.for_each([&](Id id, const Surface& s) {
       if (s.outline.empty()) return;
-      Box b{to_i32(params.resolve(s.outline[0].x)), to_i32(params.resolve(s.outline[0].y)), to_i32(params.resolve(s.outline[0].x)), to_i32(params.resolve(s.outline[0].y))};
-      for (const auto& p : s.outline) { const auto px=to_i32(params.resolve(p.x)); const auto py=to_i32(params.resolve(p.y)); b.x0 = std::min(b.x0, px); b.y0 = std::min(b.y0, py); b.x1 = std::max(b.x1, px); b.y1 = std::max(b.y1, py); }
+      Box b{to_i32(expr_pool.resolve(s.outline[0].x)), to_i32(expr_pool.resolve(s.outline[0].y)), to_i32(expr_pool.resolve(s.outline[0].x)), to_i32(expr_pool.resolve(s.outline[0].y))};
+      for (const auto& p : s.outline) {
+        const auto px = to_i32(expr_pool.resolve(p.x));
+        const auto py = to_i32(expr_pool.resolve(p.y));
+        b.x0 = std::min(b.x0, px);
+        b.y0 = std::min(b.y0, py);
+        b.x1 = std::max(b.x1, px);
+        b.y1 = std::max(b.y1, py);
+      }
       out.push_back({s.layer, b, id});
     });
     return out;

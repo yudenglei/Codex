@@ -10,6 +10,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 
 namespace cae {
 
@@ -19,6 +20,9 @@ class IExprEngine {
   virtual void set(std::string name, double value) = 0;
   virtual double eval(const std::string& expr) = 0;
   virtual double get(std::string_view name) const = 0;
+
+  void setVariable(std::string name, double value) { set(std::move(name), value); }
+  double evaluate(const std::string& expr) { return eval(expr); }
 };
 
 class SimpleExprEngine final : public IExprEngine {
@@ -184,6 +188,10 @@ class ParamTable {
     if (expr.empty()) return 0;
     return static_cast<int64_t>(std::llround(const_cast<IExprEngine*>(engine_.get())->eval(std::string(expr))));
   }
+
+  // Grok-style compatibility API
+  void setVariable(std::string name, double value) { set_var(std::move(name), value); }
+  double evaluate(const std::string& expression) { return eval(expression); }
 
  private:
   const StringPool* strings_ = nullptr;
