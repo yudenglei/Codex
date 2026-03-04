@@ -1,0 +1,11 @@
+#pragma once
+#include "cae/capnp_io.hpp"
+#include "cae/db.hpp"
+#include "cae/entities.hpp"
+#include "cae/param_expr.hpp"
+#include "cae/reuse_vector.hpp"
+#include "cae/scene_adapter.hpp"
+#include "cae/spatial_index.hpp"
+#include "cae/string_pool.hpp"
+#include "cae/types.hpp"
+#include "cae/undo.hpp"
