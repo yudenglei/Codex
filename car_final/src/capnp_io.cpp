@@ -12,8 +12,10 @@ namespace cae {
 
 #ifdef CAE_ENABLE_CAPNP
 
-static void write_point(::Point::Builder b, const Point& p) { b.setX(p.x); b.setY(p.y); }
-static Point read_point(::Point::Reader r) { return {r.getX(), r.getY()}; }
+static void write_dbu(::DBUValue::Builder b, DbuValue v) { b.setRaw(v.raw); }
+static DbuValue read_dbu(::DBUValue::Reader r) { return DbuValue{r.getRaw()}; }
+static void write_point(::Point::Builder b, const Point& p) { write_dbu(b.initX(), p.x); write_dbu(b.initY(), p.y); }
+static Point read_point(::Point::Reader r) { return {read_dbu(r.getX()), read_dbu(r.getY())}; }
 
 bool save_capnp(const BoardDb& db, const std::string& path) {
   ::capnp::MallocMessageBuilder message;
@@ -22,10 +24,7 @@ bool save_capnp(const BoardDb& db, const std::string& path) {
   std::vector<std::pair<StringId, std::string>> strings;
   db.strings.for_each([&](StringId id, std::string_view s) { strings.emplace_back(id, std::string(s)); });
   auto rs = root.initStrings(strings.size());
-  for (size_t i = 0; i < strings.size(); ++i) {
-    rs[i].setId(strings[i].first);
-    rs[i].setValue(strings[i].second);
-  }
+  for (size_t i = 0; i < strings.size(); ++i) { rs[i].setId(strings[i].first); rs[i].setValue(strings[i].second); }
 
   std::vector<Layer> layers; db.layers.for_each([&](Id, const Layer& o) { layers.push_back(o); });
   auto rl = root.initLayers(layers.size());
@@ -43,7 +42,7 @@ bool save_capnp(const BoardDb& db, const std::string& path) {
     for (size_t k = 0; k < traces[i].segments.size(); ++k) {
       write_point(segs[k].initP0(), traces[i].segments[k].p0);
       write_point(segs[k].initP1(), traces[i].segments[k].p1);
-      segs[k].setWidth(traces[i].segments[k].width);
+      write_dbu(segs[k].initWidth(), traces[i].segments[k].width);
     }
   }
 
@@ -70,7 +69,7 @@ bool load_capnp(BoardDb& db, const std::string& path) {
   for (auto t : root.getTraces()) {
     Trace tr{}; tr.net = t.getNet(); tr.layer = t.getLayer();
     for (auto s : t.getSegments()) {
-      Segment seg{}; seg.p0 = read_point(s.getP0()); seg.p1 = read_point(s.getP1()); seg.width = s.getWidth();
+      Segment seg{}; seg.p0 = read_point(s.getP0()); seg.p1 = read_point(s.getP1()); seg.width = read_dbu(s.getWidth());
       tr.segments.push_back(seg);
     }
     db.add_trace(tr);

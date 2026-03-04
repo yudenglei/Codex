@@ -9,7 +9,7 @@
 ## 2. 综合方案（面向高性能/低内存/可事务回放）
 
 ### 2.1 数据层
-- 全对象使用稳定 `Id`，容器使用 `ReuseVector<T>`。
+- 全对象使用稳定 `Id`，容器使用 `ReuseVector<T>`；几何尺寸统一使用 `DbuValue`（literal/param tagged）支持参数化变量。
 - 跨层对象（`PadstackDef/BondWire/LayerStack`）全局权威存储。
 - 层内热路径对象（如 `Trace`）附加 layer->ids 与 layer spatial index。
 

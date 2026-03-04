@@ -46,7 +46,7 @@ class BoardDb : public SceneAdapter {
     Id id = add_generic(traces, t);
     auto* tr = traces.get(id);
     layer_traces_[tr->layer].push_back(id);
-    trace_index.upsert(tr->layer, id, bbox(*tr));
+    trace_index.upsert(tr->layer, id, bbox(*tr, [this](DbuValue v){ return params.resolve(v);}));
     tx.push({[this, id, layer = tr->layer]() {
                traces.remove(id);
                auto& v = layer_traces_[layer];
@@ -58,7 +58,7 @@ class BoardDb : public SceneAdapter {
                tr.id = nid;
                traces.replace(nid, tr);
                layer_traces_[tr.layer].push_back(nid);
-               trace_index.upsert(tr.layer, nid, bbox(tr));
+               trace_index.upsert(tr.layer, nid, bbox(tr, [this](DbuValue v){ return params.resolve(v);}));
              },
              "add_trace"});
     return id;
@@ -72,15 +72,15 @@ class BoardDb : public SceneAdapter {
     after.id = id;
 
     traces.replace(id, after);  // klayout 风格：remove old + add new 的容器替换语义等价
-    trace_index.upsert(after.layer, id, bbox(after));
+    trace_index.upsert(after.layer, id, bbox(after, [this](DbuValue v){ return params.resolve(v);}));
 
     tx.push({[this, id, before]() {
                traces.replace(id, before);
-               trace_index.upsert(before.layer, id, bbox(before));
+               trace_index.upsert(before.layer, id, bbox(before, [this](DbuValue v){ return params.resolve(v);}));
              },
              [this, id, after]() {
                traces.replace(id, after);
-               trace_index.upsert(after.layer, id, bbox(after));
+               trace_index.upsert(after.layer, id, bbox(after, [this](DbuValue v){ return params.resolve(v);}));
              },
              "replace_trace"});
     return true;
@@ -106,8 +106,8 @@ class BoardDb : public SceneAdapter {
 
   std::vector<ScenePrimitive> collect_2d() const override {
     std::vector<ScenePrimitive> out;
-    traces.for_each([&](Id id, const Trace& t) { out.push_back({t.layer, bbox(t), id}); });
-    texts.for_each([&](Id id, const Text& t) { out.push_back({t.layer, {t.loc.x, t.loc.y, t.loc.x, t.loc.y}, id}); });
+    traces.for_each([&](Id id, const Trace& t) { out.push_back({t.layer, bbox(t, [this](DbuValue v){ return params.resolve(v);}), id}); });
+    texts.for_each([&](Id id, const Text& t) { const auto x=to_i32(params.resolve(t.loc.x)); const auto y=to_i32(params.resolve(t.loc.y)); out.push_back({t.layer, {x,y,x,y}, id}); });
     return out;
   }
 
@@ -115,8 +115,8 @@ class BoardDb : public SceneAdapter {
     std::vector<ScenePrimitive> out;
     surfaces.for_each([&](Id id, const Surface& s) {
       if (s.outline.empty()) return;
-      Box b{s.outline[0].x, s.outline[0].y, s.outline[0].x, s.outline[0].y};
-      for (const auto& p : s.outline) { b.x0 = std::min(b.x0, p.x); b.y0 = std::min(b.y0, p.y); b.x1 = std::max(b.x1, p.x); b.y1 = std::max(b.y1, p.y); }
+      Box b{to_i32(params.resolve(s.outline[0].x)), to_i32(params.resolve(s.outline[0].y)), to_i32(params.resolve(s.outline[0].x)), to_i32(params.resolve(s.outline[0].y))};
+      for (const auto& p : s.outline) { const auto px=to_i32(params.resolve(p.x)); const auto py=to_i32(params.resolve(p.y)); b.x0 = std::min(b.x0, px); b.y0 = std::min(b.y0, py); b.x1 = std::max(b.x1, px); b.y1 = std::max(b.y1, py); }
       out.push_back({s.layer, b, id});
     });
     return out;

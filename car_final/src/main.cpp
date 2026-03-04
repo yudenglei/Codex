@@ -17,7 +17,7 @@ int main() {
   cae::Trace tr{};
   tr.net = net_id;
   tr.layer = 1;
-  tr.segments.push_back({{0, 0}, {100, 0}, 10});
+  tr.segments.push_back({{cae::lit(0), cae::lit(0)}, {cae::lit(100), cae::lit(0)}, cae::lit(10)});
   auto tid = db.add_trace(tr);
 
   db.params.set_var(sid_a, 5);

@@ -1,25 +1,29 @@
 @0x9ccbf911fcb2a371;
 
+struct DBUValue {
+  raw @0 :UInt64;
+}
+
 struct Point {
-  x @0 :Int32;
-  y @1 :Int32;
+  x @0 :DBUValue;
+  y @1 :DBUValue;
 }
 
 struct Segment {
   p0 @0 :Point;
   p1 @1 :Point;
-  width @2 :Int32;
+  width @2 :DBUValue;
 }
 
 struct Pad {
   shape @0 :UInt32;
-  sizeX @1 :Int32;
-  sizeY @2 :Int32;
-  rotation @3 :Int32;
+  sizeX @1 :DBUValue;
+  sizeY @2 :DBUValue;
+  rotation @3 :DBUValue;
 }
 
 struct Drill {
-  diameter @0 :Int32;
+  diameter @0 :DBUValue;
 }
 
 struct Layer {
@@ -63,7 +67,7 @@ struct Component {
   refdes @1 :UInt32;
   kind @2 :UInt32;
   loc @3 :Point;
-  rotation @4 :Int32;
+  rotation @4 :DBUValue;
   mirrored @5 :Bool;
   pins @6 :List(UInt32);
   description @7 :UInt32;
@@ -118,18 +122,18 @@ struct Symbol {
   category @2 :UInt32;
 }
 
-struct Text {
+struct TextEntity {
   id @0 :UInt32;
   content @1 :UInt32;
   layer @2 :UInt16;
   loc @3 :Point;
-  height @4 :Int32;
+  height @4 :DBUValue;
 }
 
 struct Constraint {
   id @0 :UInt32;
   kind @1 :UInt32;
-  value @2 :Int32;
+  value @2 :DBUValue;
   targetA @3 :UInt32;
   targetB @4 :UInt32;
 }
@@ -154,6 +158,6 @@ struct DbSnapshot {
   ports @11 :List(Port);
   surfaces @12 :List(Surface);
   symbols @13 :List(Symbol);
-  texts @14 :List(Text);
+  texts @14 :List(TextEntity);
   constraints @15 :List(Constraint);
 }

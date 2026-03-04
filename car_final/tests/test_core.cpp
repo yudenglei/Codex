@@ -18,17 +18,17 @@ int main() {
   cae::Trace t{};
   t.net = net_id;
   t.layer = 2;
-  t.segments.push_back({{0, 0}, {10, 10}, 5});
+  t.segments.push_back({{cae::lit(0), cae::lit(0)}, {cae::lit(10), cae::lit(10)}, cae::lit(5)});
   auto tid = db.add_trace(t);
   auto hits = db.query_trace_on_layer(2, {0, 0, 10, 10});
   assert(hits.size() == 1 && hits[0] == tid);
 
   cae::Trace t2 = *db.traces.get(tid);
-  t2.segments[0].width = 8;
+  t2.segments[0].width = cae::lit(8);
   assert(db.replace_trace(tid, t2));
-  assert(db.traces.get(tid)->segments[0].width == 8);
+  assert(db.traces.get(tid)->segments[0].width.lit() == 8);
   assert(db.tx.undo());
-  assert(db.traces.get(tid)->segments[0].width == 5);
+  assert(db.traces.get(tid)->segments[0].width.lit() == 5);
   assert(db.tx.redo());
 
   auto ft = db.strings.search_full_text("power");
